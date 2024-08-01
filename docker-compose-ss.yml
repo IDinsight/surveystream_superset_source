@@ -1,0 +1,89 @@
+x-superset-depends-on: &superset-depends-on
+  - db
+  - redis
+x-superset-volumes:
+  &superset-volumes # /app/pythonpath_docker will be appended to the PYTHONPATH in the final container
+  - ./docker:/app/docker
+  - superset_home:/app/superset_home
+
+x-common-build: &common-build
+  context: .
+  target: dev
+  cache_from:
+    - apache/superset-cache:3.10-slim-bookworm
+
+version: '4.0'
+services:
+  redis:
+    image: redis:7
+    container_name: superset_cache
+    restart: unless-stopped
+    volumes:
+      - redis:/data
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+
+  db:
+      env_file:
+        - path: docker/.env
+          required: true
+      image: postgres:16.2
+      environment:
+        POSTGRES_DB: superset
+        POSTGRES_PASSWORD: superset
+        POSTGRES_USER: superset
+      extra_hosts:
+        - "host.docker.internal:host-gateway"
+      ports:
+        - "5434:5434"
+      command: -p 5434
+      
+  superset:
+    image: superset:latest
+    depends_on:
+      - db
+      - redis
+    environment:
+      - ADMIN_ACCOUNT=${ADMIN_ACCOUNT}
+    command: webserver
+    ports:
+      - "80:8088"
+    extra_hosts:
+    - "host.docker.internal:host-gateway"
+
+  superset_worker:
+    image: superset:latest
+    depends_on:
+      - db
+      - redis
+    environment:
+      - ADMIN_ACCOUNT=${ADMIN_ACCOUNT}
+    command: worker
+    links: 
+      - "superset:superset"
+    extra_hosts:
+    - "host.docker.internal:host-gateway"
+
+  superset_flower:
+    image: superset:latest
+    depends_on:
+      - db
+      - redis
+    environment:
+      - ADMIN_ACCOUNT=${ADMIN_ACCOUNT}
+    command: flower
+    extra_hosts:
+    - "host.docker.internal:host-gateway"
+
+  superset_beat:
+    image: superset:latest
+    depends_on:
+      - db
+      - redis
+    environment:
+      - ADMIN_ACCOUNT=${ADMIN_ACCOUNT}
+    command: beat
+    extra_hosts:
+    - "host.docker.internal:host-gateway"
+  
+
