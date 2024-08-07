@@ -1,0 +1,68 @@
+version: '3'
+services:
+  superset_redis:
+    image: redis
+    extra_hosts:
+    - "host.docker.internal:host-gateway"
+
+  superset_postgres:
+    image: postgres:16.2
+    environment:
+      POSTGRES_DB: superset
+      POSTGRES_PASSWORD: superset
+      POSTGRES_USER: superset
+    extra_hosts:
+    - "host.docker.internal:host-gateway"
+    ports:
+      - "5434:5434"
+    command:
+      -p 5434
+      
+  superset:
+    image: superset-dev:latest
+    depends_on:
+      - superset_postgres
+      - superset_redis
+    environment:
+      - ADMIN_ACCOUNT=${ADMIN_ACCOUNT}
+    command: webserver
+    ports:
+      - "80:8088"
+    extra_hosts:
+    - "host.docker.internal:host-gateway"
+
+  superset_worker:
+    image: superset-dev:latest
+    depends_on:
+      - superset_postgres
+      - superset_redis
+    environment:
+      - ADMIN_ACCOUNT=${ADMIN_ACCOUNT}
+    command: worker
+    links: 
+      - "superset:superset"
+    extra_hosts:
+    - "host.docker.internal:host-gateway"
+
+  superset_flower:
+    image: superset-dev:latest
+    depends_on:
+      - superset_postgres
+      - superset_redis
+    environment:
+      - ADMIN_ACCOUNT=${ADMIN_ACCOUNT}
+    command: flower
+    extra_hosts:
+    - "host.docker.internal:host-gateway"
+
+  superset_beat:
+    image: superset-dev:latest
+    depends_on:
+      - superset_postgres
+      - superset_redis
+    environment:
+      - ADMIN_ACCOUNT=${ADMIN_ACCOUNT}
+    command: beat
+    extra_hosts:
+    - "host.docker.internal:host-gateway"
+

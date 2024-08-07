@@ -35,57 +35,75 @@ services:
       extra_hosts:
         - "host.docker.internal:host-gateway"
       ports:
-        - "5434:5434"
-      command: -p 5434
-      
-  superset:
-    image: superset:latest
-    depends_on:
-      - db
-      - redis
-    environment:
-      - ADMIN_ACCOUNT=${ADMIN_ACCOUNT}
-    command: webserver
-    ports:
-      - "80:8088"
-    extra_hosts:
-    - "host.docker.internal:host-gateway"
+        - "5432:5432"
+      command: -p 5432
+      volumes:
+      - db_home:/var/lib/postgresql/data
+      - ./docker/docker-entrypoint-initdb.d:/docker-entrypoint-initdb.d
 
+  superset:
+    env_file:
+      - path: docker/.env # default
+        required: true
+    build:
+      <<: *common-build
+    environment:
+      - ADMIN_ACCOUNT=${ADMIN_ACCOUNT}
+    container_name: superset
+    user: "root"
+    # command: webserver
+    ports:
+      - "8088:8088"
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    depends_on: *superset-depends-on
+    volumes: *superset-volumes
   superset_worker:
-    image: superset:latest
+    # image: superset:latest
+    build:
+      <<: *common-build
     depends_on:
       - db
+      - superset
       - redis
     environment:
       - ADMIN_ACCOUNT=${ADMIN_ACCOUNT}
-    command: worker
+    command: celery worker -B -l info -A app.tasks.celery
     links: 
       - "superset:superset"
     extra_hosts:
     - "host.docker.internal:host-gateway"
+    
 
   superset_flower:
-    image: superset:latest
+    build:
+      <<: *common-build
     depends_on:
       - db
       - redis
+      - superset
     environment:
       - ADMIN_ACCOUNT=${ADMIN_ACCOUNT}
-    command: flower
+    command: celery --broker=amqp://guest:guest@localhost:5672// flower
     extra_hosts:
     - "host.docker.internal:host-gateway"
 
   superset_beat:
-    image: superset:latest
+    build:
+      <<: *common-build
     depends_on:
       - db
       - redis
+      - superset
     environment:
       - ADMIN_ACCOUNT=${ADMIN_ACCOUNT}
-    command: beat
+    command: celery beat
     extra_hosts:
     - "host.docker.internal:host-gateway"
 volumes:
   redis:
-  db_home:
+    external: false
   superset_home:
+    external: false
+  db_home:
+    external: false

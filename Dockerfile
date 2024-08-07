@@ -24,6 +24,19 @@ ARG PY_VER=3.10-slim-bookworm
 ARG BUILDPLATFORM=${BUILDPLATFORM:-amd64}
 FROM --platform=${BUILDPLATFORM} node:18-bullseye-slim AS superset-node
 
+ARG MODE
+ENV CONFIG=${MODE:+PRODUCTION}
+ENV CONFIG=${CONFIG:-DEVELOPMENT}
+
+ARG BOOTSTRAP_FILE
+ENV BOOTSTRAP_FILE=$BOOTSTRAP_FILE
+
+ARG ENTRYPOINT_FILE
+ENV ENTRYPOINT_FILE=$ENTRYPOINT_FILE
+
+ARG SUPERSET_CONFIG_FILE
+ENV SUPERSET_CONFIG_FILE=$SUPERSET_CONFIG_FILE
+
 ARG NPM_BUILD_CMD="build"
 
 # Somehow we need python3 + build-essential on this side of the house to install node-gyp
@@ -33,6 +46,30 @@ RUN apt-get update -qq \
         build-essential \
         python3
 
+RUN  apt-get update \
+        && apt-get install -y wget \
+        && rm -rf /var/lib/apt/lists/*
+
+RUN apt-get update -yqq \
+        && apt-get upgrade -yqq \
+        && apt-get install -yqq --no-install-recommends jq firefox-esr\
+        && apt-get autoremove -yqq --purge \
+        && apt-get clean \
+        && rm -rf \
+            /var/lib/apt/lists/* \
+            /tmp/* \
+            /var/tmp/* \
+            /usr/share/man \
+            /usr/share/doc \
+            /usr/share/doc-base
+    
+    
+ENV GECKODRIVER_VERSION=0.33.0
+RUN wget -q https://github.com/mozilla/geckodriver/releases/download/v${GECKODRIVER_VERSION}/geckodriver-v${GECKODRIVER_VERSION}-linux64.tar.gz && \
+    tar -x geckodriver -zf geckodriver-v${GECKODRIVER_VERSION}-linux64.tar.gz -O > /usr/bin/geckodriver && \
+    chmod 755 /usr/bin/geckodriver && \
+    rm geckodriver-v${GECKODRIVER_VERSION}-linux64.tar.gz
+
 ENV BUILD_CMD=${NPM_BUILD_CMD} \
     PUPPETEER_SKIP_CHROMIUM_DOWNLOAD=true
 # NPM ci first, as to NOT invalidate previous steps except for when package.json changes
@@ -41,9 +78,27 @@ RUN --mount=type=bind,target=/frontend-mem-nag.sh,src=./docker/frontend-mem-nag.
     /frontend-mem-nag.sh
 
 WORKDIR /app/superset-frontend
-RUN --mount=type=bind,target=./package.json,src=./superset-frontend/package.json \
+# RUN npm install
+
+# RUN --mount=type=bind,target=./package.json,src=./superset-frontend/package.json \
+#     --mount=type=bind,target=./package-lock.json,src=./superset-frontend/package-lock.json \
+#     npm ci --verbose
+
+###### Changed Part Begins
+################### First NPM CI with timeout
+RUN --mount=type=bind,target=./package.json,src=./superset-frontend/package.json \ 
+### This line same as original
     --mount=type=bind,target=./package-lock.json,src=./superset-frontend/package-lock.json \
-    npm ci
+ ### This line same as original
+    bash -c 'timeout 5m npm ci --verbose || true'  ## Added timeout here
+
+
+COPY ./superset-frontend ./ 
+### This line same as original
+################### Second NPM CI without timeout
+RUN npm ci --verbose  
+### Second NPM CI
+###### Changed Part Ends
 
 # Runs the webpack build process
 COPY superset-frontend /app/superset-frontend

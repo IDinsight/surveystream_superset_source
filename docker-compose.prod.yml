@@ -1,0 +1,61 @@
+version: '2'
+services:
+  superset:
+    image: ${PROD_ACCOUNT}.dkr.ecr.ap-south-1.amazonaws.com/superset-ecr-repository:pro
+    cpu_shares: 1000
+    mem_limit: 21807m
+    environment:
+      - ADMIN_ACCOUNT=${ADMIN_ACCOUNT}
+    ports:
+      - "8088"
+    command: webserver
+    logging:
+      driver: awslogs
+      options:
+        awslogs-group: superset
+        awslogs-region: ap-south-1
+        awslogs-stream-prefix: superset-webserver
+  worker:
+    image: ${PROD_ACCOUNT}.dkr.ecr.ap-south-1.amazonaws.com/superset-ecr-repository:pro
+    cpu_shares: 6000
+    mem_limit: 7935m
+    environment:
+      - ADMIN_ACCOUNT=${ADMIN_ACCOUNT}
+    command: worker
+    logging:
+      driver: awslogs
+      options:
+        awslogs-group: superset
+        awslogs-region: ap-south-1
+        awslogs-stream-prefix: superset-worker
+    links: 
+      - "superset:superset"
+  flower:
+    image: ${PROD_ACCOUNT}.dkr.ecr.ap-south-1.amazonaws.com/superset-ecr-repository:pro
+    cpu_shares: 480
+    mem_limit: 1000m
+    environment:
+      - ADMIN_ACCOUNT=${ADMIN_ACCOUNT}
+    ports:
+      - "5555"
+    command: flower
+    logging:
+      driver: awslogs
+      options:
+        awslogs-group: superset
+        awslogs-region: ap-south-1
+        awslogs-stream-prefix: superset-flower
+  beat:
+    image: ${PROD_ACCOUNT}.dkr.ecr.ap-south-1.amazonaws.com/superset-ecr-repository:pro
+    cpu_shares: 480
+    mem_limit: 1000m
+    environment:
+      - ADMIN_ACCOUNT=${ADMIN_ACCOUNT}
+    command: beat
+    logging:
+      driver: awslogs
+      options:
+        awslogs-group: superset
+        awslogs-region: ap-south-1
+        awslogs-stream-prefix: superset-beat
+
