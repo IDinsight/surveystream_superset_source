@@ -11,7 +11,6 @@ x-common-build: &common-build
   target: dev
   cache_from:
     - apache/superset-cache:3.10-slim-bookworm
-
 version: '4.0'
 services:
   redis:
@@ -27,11 +26,11 @@ services:
       env_file:
         - path: docker/.env
           required: true
-      image: postgres:16.2
+      image: postgres:15
       environment:
         POSTGRES_DB: superset
-        POSTGRES_PASSWORD: superset
-        POSTGRES_USER: superset
+        DATABASE_PASSWORD: superset
+        DATABASE_HOST: "127.0.0.1"
       extra_hosts:
         - "host.docker.internal:host-gateway"
       ports:
@@ -58,6 +57,7 @@ services:
       - "host.docker.internal:host-gateway"
     depends_on: *superset-depends-on
     volumes: *superset-volumes
+
   superset_worker:
     # image: superset:latest
     build:
@@ -67,12 +67,13 @@ services:
       - superset
       - redis
     environment:
-      - ADMIN_ACCOUNT=${ADMIN_ACCOUNT}
-    command: celery worker -B -l info -A app.tasks.celery
+        # ADMIN_ACCOUNT:"ADMIN_ACCOUNT"
+        DATABASE_HOST: localhost
+    command: celery -A superset.tasks.celery_app worker --pool=gevent --concurrency=4
     links: 
       - "superset:superset"
     extra_hosts:
-    - "host.docker.internal:host-gateway"
+      - "host.docker.internal:host-gateway"
     
 
   superset_flower:
@@ -84,7 +85,7 @@ services:
       - superset
     environment:
       - ADMIN_ACCOUNT=${ADMIN_ACCOUNT}
-    command: celery --broker=amqp://guest:guest@localhost:5672// flower
+    command:  celery  -A superset.tasks.celery_app flower
     extra_hosts:
     - "host.docker.internal:host-gateway"
 
@@ -97,7 +98,7 @@ services:
       - superset
     environment:
       - ADMIN_ACCOUNT=${ADMIN_ACCOUNT}
-    command: celery beat
+    command:  celery  -A superset.tasks.celery_app beat --pidfile /tmp/celerybeat.pid --schedule /tmp/celerybeat-schedule 
     extra_hosts:
     - "host.docker.internal:host-gateway"
 volumes:
